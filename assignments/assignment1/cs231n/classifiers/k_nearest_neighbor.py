@@ -1,6 +1,6 @@
 import numpy as np
-from scipy import stats
-
+#from scipy import stats
+from collections import Counter
 
 class KNearestNeighbor(object):
   """ a kNN classifier with L2 distance """
@@ -62,13 +62,12 @@ class KNearestNeighbor(object):
       is the Euclidean distance between the ith test point and the jth training
       point.
     """
-    num_test = X.shape[0]
-    num_train = self.X_train.shape[0]
+    num_test = X.shape[0] #500
+    num_train = self.X_train.shape[0] #5000
     dists = np.zeros((num_test, num_train))
     for i in xrange(num_test):
       for j in xrange(num_train):
-        difference = X[i] - self.X_train[j]
-        dists[i, j] = np.sqrt(np.dot(difference, difference))
+          dists[i,j] = np.sqrt(np.sum(np.square(X[i] - self.X_train[j])))
     return dists
 
   def compute_distances_one_loop(self, X):
@@ -78,9 +77,12 @@ class KNearestNeighbor(object):
 
     Input / Output: Same as compute_distances_two_loops
     """
-    # TODO: Can't figure out a single loop that's faster than the
-    # double loop above. So until it's figured out, we reuse that.
-    return self.compute_distances_two_loops(X)
+    num_test = X.shape[0] #500
+    num_train = self.X_train.shape[0] #5000
+    dists = np.zeros((num_test, num_train))
+    for i in xrange(num_test):
+        dists[i] = np.sqrt(np.sum(np.square(X[i] - self.X_train), axis = 1))
+    return dists
 
   def compute_distances_no_loops(self, X):
     """
@@ -88,15 +90,43 @@ class KNearestNeighbor(object):
     in self.X_train using no explicit loops.
 
     Input / Output: Same as compute_distances_two_loops
+    
+    HINT: Try to formulate the l2 distance using matrix multiplication    
+          and two broadcast sums. Example below.
+    a = np.array([1,2,3,4])
+    a
+    array([1, 2, 3, 4])    
+    a = a.reshape(-1,1)    
+    a 
+    array([[1],
+           [2],
+           [3],
+           [4]])    
+    b = np.array([6,1,3,5])    
+    b
+    array([6, 1, 3, 5])    
+    print a.shape, b.shape
+    (4, 1) (4,)    
+    a+b 
+    array([[ 7,  2,  4,  6],
+           [ 8,  3,  5,  7],
+           [ 9,  4,  6,  8],
+           [10,  5,  7,  9]])
     """
     num_test = X.shape[0]
     num_train = self.X_train.shape[0]
     dists = np.zeros((num_test, num_train))
-
-    test_square = np.sum(np.square(X), axis=1)
-    train_square = np.sum(np.square(self.X_train), axis=1)
-    product = np.dot(X, self.X_train.T)
-    dists = np.sqrt(test_square.reshape(-1, 1) + train_square - 2*product)
+    
+    sq_train = np.sum(np.square(self.X_train), axis = 1) 
+#    print 'Shape of sq_train:', sq_train.shape #shape: (5000,)
+    sq_test = np.sum(np.square(X), axis = 1) 
+#    print 'Shape of sq_test:', sq_test.shape 
+#    print 'Shape of sq_test.reshape(-1,1):', sq_test.reshape(-1,1).shape 
+    #shape: (500,) reshape(-1,1) will make the shape to (500,1)
+    XdotX_train = np.dot(X, self.X_train.T)
+#    print 'Shape of XdotX_train:', XdotX_train.shape #shape: (500,5000)
+    dists = np.sqrt(sq_test.reshape(-1,1) + sq_train - 2*XdotX_train) 
+    #sq test and train will be the two broadcast sums
     return dists
 
   def predict_labels(self, dists, k=1):
@@ -118,8 +148,8 @@ class KNearestNeighbor(object):
       # A list of length k storing the labels of the k nearest neighbors to
       # the ith test point.
       closest_y = []
-      k_nearest_idx = np.argsort(dists[i, :])[0:k]
-      closest_y = self.y_train[k_nearest_idx]
-      y_pred = stats.mode(closest_y)
+      sorted_dists = np.argsort(dists[i])
+      closest_y = self.y_train[sorted_dists][:k]
+      y_pred[i] = Counter(closest_y).most_common(1)[0][0]
     return y_pred
 
